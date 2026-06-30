@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  flipt:
+    image: flipt/flipt:v1.61.1
+    ports:
+      - "8080:8080"
+      - "9000:9000"
+    environment:
+      FLIPT_DB_URL: postgres://postgres:postgres@postgres:5432/flipt?sslmode=disable
+      FLIPT_META_TELEMETRY_ENABLED: "false"
+      FLIPT_LOG_LEVEL: info
+    command: ["./flipt", "--force-migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  flipt-seed:
+    build: ./flipt-seed
+    environment:
+      FLIPT_URL: http://flipt:8080
+    depends_on:
+      flipt:
+        condition: service_healthy
+    restart: "no"
+
+  app1:
+    build: ./app1
+    ports:
+      - "5001:5001"
+    environment:
+      FLIPT_URL: http://flipt:8080
+      FLIPT_NAMESPACE: dev
+    depends_on:
+      flipt-seed:
+        condition: service_completed_successfully
+
+volumes:
+  postgres_data:

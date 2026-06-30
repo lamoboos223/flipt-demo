@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ 'v2' if theme_v2 else 'v1' }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MarketPlace</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="phone-frame">
+    <div class="status-bar">
+      <span>9:41</span>
+      <span class="status-icons">📶 🔋</span>
+    </div>
+
+    <header class="app-header">
+      <div class="logo">Market<span>Place</span></div>
+      <div class="env-badge" id="env-badge">{{ env | upper }}</div>
+    </header>
+
+    <div class="env-switcher">
+      <span>Environment:</span>
+      <button class="env-btn {{ 'active' if env == 'dev' else '' }}" data-env="dev">Dev</button>
+      <button class="env-btn {{ 'active' if env == 'qa' else '' }}" data-env="qa">QA</button>
+      <button class="env-btn {{ 'active' if env == 'prod' else '' }}" data-env="prod">Prod</button>
+    </div>
+
+    <div class="city-switcher">
+      <label for="city-select">Your city:</label>
+      <select id="city-select">
+        <option value="riyadh" {{ 'selected' if city == 'riyadh' else '' }}>Riyadh</option>
+        <option value="makkah" {{ 'selected' if city == 'makkah' else '' }}>Makkah</option>
+        <option value="jeddah" {{ 'selected' if city == 'jeddah' else '' }}>Jeddah</option>
+        <option value="dammam" {{ 'selected' if city == 'dammam' else '' }}>Dammam</option>
+      </select>
+    </div>
+
+    {% if express_checkout %}
+    <div class="express-banner" id="express-banner">
+      ⚡ Express Checkout enabled — tap any product to buy instantly
+    </div>
+    {% endif %}
+
+    <div class="search-bar">
+      <span>🔍</span>
+      <input type="search" id="search-input" placeholder="Search products..." autocomplete="off">
+    </div>
+
+    <main class="content" id="product-list">
+      <div class="loading">Loading products...</div>
+    </main>
+
+  <nav class="bottom-nav">
+      <button class="nav-item active">🏠<span>Home</span></button>
+      <button class="nav-item">📦<span>Orders</span></button>
+      <button class="nav-item" id="cart-btn">🛒<span>Cart</span></button>
+      <button class="nav-item">👤<span>Account</span></button>
+    </nav>
+  </div>
+
+  <div class="modal hidden" id="checkout-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Checkout</h2>
+        <button class="close-btn" id="close-modal">&times;</button>
+      </div>
+      <div class="product-summary" id="checkout-product"></div>
+      <h3>Payment Method</h3>
+      <div class="payment-methods" id="payment-methods"></div>
+      <button class="checkout-btn" id="place-order">Place Order</button>
+      <div class="order-result hidden" id="order-result"></div>
+    </div>
+  </div>
+
+  <script>
+    window.APP_CONFIG = {
+      env: "{{ env }}",
+      city: "{{ city }}",
+      themeV2: {{ 'true' if theme_v2 else 'false' }},
+      expressCheckout: {{ 'true' if express_checkout else 'false' }}
+    };
+  </script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
