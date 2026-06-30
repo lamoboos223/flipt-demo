@@ -5,11 +5,30 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from catalog import PRODUCTS, get_product
-from config import DEFAULT_NAMESPACE, ENV_PATTERN
-from flipt import build_payment_methods, evaluate_flags, get_evaluation_context
+from config import DEFAULT_NAMESPACE, ENV_PATTERN, PROMO_BANNER_MESSAGES
+from flipt import build_payment_methods, evaluate_all, get_evaluation_context
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+
+
+def build_flag_response(namespace: str, entity_id: str, context: dict, evaluated: dict):
+    booleans = evaluated["booleans"]
+    variants = evaluated["variants"]
+    promo = variants.get("promo-banner", "none")
+    return {
+        "namespace": namespace,
+        "entity_id": entity_id,
+        "context": context,
+        "flags": booleans,
+        "variants": variants,
+        "payment_methods": build_payment_methods(booleans),
+        "theme_v2": booleans.get("theme-v2", False),
+        "promo_banner": promo,
+        "promo_message": PROMO_BANNER_MESSAGES.get(promo),
+        "product_card_style": variants.get("product-card-style", "grid"),
+        "checkout_layout": variants.get("checkout-layout", "classic"),
+    }
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -19,16 +38,19 @@ async def home(
 ):
     entity_id = request.cookies.get("user_id", str(uuid.uuid4()))
     context = get_evaluation_context(request)
-    flags = await evaluate_flags(env, entity_id, context)
+    evaluated = await evaluate_all(env, entity_id, context)
+    data = build_flag_response(env, entity_id, context, evaluated)
     response = templates.TemplateResponse(
         request,
         "index.html",
         {
             "env": env,
             "city": context["city"],
-            "flags": flags,
-            "theme_v2": flags.get("theme-v2", False),
-            "express_checkout": flags.get("express-checkout", False),
+            "theme_v2": data["theme_v2"],
+            "express_checkout": data["flags"].get("express-checkout", False),
+            "promo_message": data["promo_message"],
+            "product_card_style": data["product_card_style"],
+            "checkout_layout": data["checkout_layout"],
         },
     )
     if "user_id" not in request.cookies:
@@ -50,15 +72,8 @@ async def get_flags(
 ):
     entity_id = request.cookies.get("user_id", "anonymous")
     context = get_evaluation_context(request)
-    flags = await evaluate_flags(env, entity_id, context)
-    return {
-        "namespace": env,
-        "entity_id": entity_id,
-        "context": context,
-        "flags": flags,
-        "payment_methods": build_payment_methods(flags),
-        "theme_v2": flags.get("theme-v2", False),
-    }
+    evaluated = await evaluate_all(env, entity_id, context)
+    return build_flag_response(env, entity_id, context, evaluated)
 
 
 @router.post("/api/checkout")
@@ -71,8 +86,9 @@ async def checkout(
     context = get_evaluation_context(request)
     if body.get("city"):
         context["city"] = str(body["city"]).lower()
-    flags = await evaluate_flags(env, entity_id, context)
-    allowed_methods = {m["id"] for m in build_payment_methods(flags)}
+    evaluated = await evaluate_all(env, entity_id, context)
+    booleans = evaluated["booleans"]
+    allowed_methods = {m["id"] for m in build_payment_methods(booleans)}
     payment_method = body.get("payment_method", "credit-card")
     product_id = body.get("product_id")
 
@@ -93,6 +109,7 @@ async def checkout(
         raise HTTPException(status_code=404, detail="Product not found")
 
     order_id = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+    variants = evaluated["variants"]
     return {
         "success": True,
         "order_id": order_id,
@@ -100,7 +117,9 @@ async def checkout(
         "product": {"id": product["id"], "name": product["name"], "price": product["price"]},
         "payment_method": payment_method,
         "context": context,
-        "theme_v2": flags.get("theme-v2", False),
+        "variants": variants,
+        "checkout_layout": variants.get("checkout-layout", "classic"),
+        "theme_v2": booleans.get("theme-v2", False),
         "message": f"Order placed via {payment_method} in {env} environment",
     }
 

@@ -1,12 +1,21 @@
 let currentEnv = window.APP_CONFIG.env;
 let currentCity = window.APP_CONFIG.city;
+let productCardStyle = window.APP_CONFIG.productCardStyle || "grid";
+let checkoutLayout = window.APP_CONFIG.checkoutLayout || "classic";
 let selectedProduct = null;
 let selectedPayment = "credit-card";
 let paymentMethods = [];
 let allProducts = [];
 
+function applyProductLayout(style) {
+  const list = document.getElementById("product-list");
+  list.classList.remove("product-layout-grid", "product-layout-list");
+  list.classList.add(`product-layout-${style}`);
+}
+
 function renderProducts(products) {
   const list = document.getElementById("product-list");
+  applyProductLayout(productCardStyle);
 
   if (products.length === 0) {
     list.innerHTML = '<div class="loading">No products match your search</div>';
@@ -53,8 +62,16 @@ function filterProducts(query) {
 async function loadProducts() {
   const list = document.getElementById("product-list");
   try {
-    const res = await fetch("/api/products");
-    const data = await res.json();
+    const [productsRes] = await Promise.all([
+      fetch("/api/products"),
+      fetch(`/api/flags?env=${currentEnv}&city=${encodeURIComponent(currentCity)}`)
+        .then((res) => res.json())
+        .then((data) => {
+          productCardStyle = data.product_card_style || productCardStyle;
+          checkoutLayout = data.checkout_layout || checkoutLayout;
+        }),
+    ]);
+    const data = await productsRes.json();
     allProducts = data.products;
     renderProducts(allProducts);
   } catch {
@@ -66,6 +83,9 @@ async function loadFlags() {
   const res = await fetch(`/api/flags?env=${currentEnv}&city=${encodeURIComponent(currentCity)}`);
   const data = await res.json();
   paymentMethods = data.payment_methods;
+  productCardStyle = data.product_card_style || productCardStyle;
+  checkoutLayout = data.checkout_layout || checkoutLayout;
+  applyProductLayout(productCardStyle);
   return data;
 }
 
@@ -102,6 +122,14 @@ async function openCheckout(card) {
   };
 
   await loadFlags();
+
+  const checkoutContent = document.getElementById("checkout-content");
+  checkoutContent.classList.remove(
+    "checkout-layout-classic",
+    "checkout-layout-compact",
+    "checkout-layout-one-page"
+  );
+  checkoutContent.classList.add(`checkout-layout-${checkoutLayout}`);
 
   document.getElementById("checkout-product").innerHTML = `
     <strong>${selectedProduct.name}</strong><br>

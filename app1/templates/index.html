@@ -35,6 +35,10 @@
       </select>
     </div>
 
+    {% if promo_message %}
+    <div class="promo-banner" id="promo-banner">{{ promo_message }}</div>
+    {% endif %}
+
     {% if express_checkout %}
     <div class="express-banner" id="express-banner">
       ⚡ Express Checkout enabled — tap any product to buy instantly
@@ -46,7 +50,7 @@
       <input type="search" id="search-input" placeholder="Search products..." autocomplete="off">
     </div>
 
-    <main class="content" id="product-list">
+    <main class="content product-layout-{{ product_card_style }}" id="product-list">
       <div class="loading">Loading products...</div>
     </main>
 
@@ -59,7 +63,7 @@
   </div>
 
   <div class="modal hidden" id="checkout-modal">
-    <div class="modal-content">
+    <div class="modal-content checkout-layout-{{ checkout_layout }}" id="checkout-content">
       <div class="modal-header">
         <h2>Checkout</h2>
         <button class="close-btn" id="close-modal">&times;</button>
@@ -77,7 +81,9 @@
       env: "{{ env }}",
       city: "{{ city }}",
       themeV2: {{ 'true' if theme_v2 else 'false' }},
-      expressCheckout: {{ 'true' if express_checkout else 'false' }}
+      expressCheckout: {{ 'true' if express_checkout else 'false' }},
+      productCardStyle: "{{ product_card_style }}",
+      checkoutLayout: "{{ checkout_layout }}"
     };
   </script>
   <script src="/static/js/app.js"></script>

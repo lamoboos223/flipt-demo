@@ -1,7 +1,14 @@
 import httpx
 from fastapi import HTTPException, Request
 
-from config import BOOLEAN_FLAGS, DEFAULT_CITY, FLIPT_URL, PAYMENT_FLAG_MAP
+from config import (
+    BOOLEAN_FLAGS,
+    DEFAULT_CITY,
+    FLIPT_URL,
+    PAYMENT_FLAG_MAP,
+    VARIANT_FLAGS,
+    VARIANT_FALLBACKS,
+)
 
 
 def get_evaluation_context(request: Request) -> dict[str, str]:
@@ -38,16 +45,46 @@ async def evaluate_boolean_flag(
     return response.json().get("enabled", False)
 
 
-async def evaluate_flags(
+async def evaluate_variant_flag(
+    client: httpx.AsyncClient,
+    namespace: str,
+    flag_key: str,
+    entity_id: str,
+    context: dict[str, str],
+) -> str:
+    response = await client.post(
+        f"{FLIPT_URL}/evaluate/v1/variant",
+        json={
+            "namespaceKey": namespace,
+            "flagKey": flag_key,
+            "entityId": entity_id,
+            "context": context,
+        },
+        timeout=10.0,
+    )
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Flipt evaluation failed for {flag_key}: {response.text}",
+        )
+    return response.json().get("variantKey") or VARIANT_FALLBACKS[flag_key]
+
+
+async def evaluate_all(
     namespace: str, entity_id: str, context: dict[str, str]
-) -> dict[str, bool]:
-    flags: dict[str, bool] = {}
+) -> dict:
+    booleans: dict[str, bool] = {}
+    variants: dict[str, str] = {}
     async with httpx.AsyncClient() as client:
         for flag_key in BOOLEAN_FLAGS:
-            flags[flag_key] = await evaluate_boolean_flag(
+            booleans[flag_key] = await evaluate_boolean_flag(
                 client, namespace, flag_key, entity_id, context
             )
-    return flags
+        for flag_key in VARIANT_FLAGS:
+            variants[flag_key] = await evaluate_variant_flag(
+                client, namespace, flag_key, entity_id, context
+            )
+    return {"booleans": booleans, "variants": variants}
 
 
 def build_payment_methods(flags: dict[str, bool]) -> list[dict[str, str]]:
