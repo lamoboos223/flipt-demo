@@ -44,16 +44,32 @@ services:
         condition: service_healthy
     restart: "no"
 
+  bff:
+    build: ./BFF
+    ports:
+      - "5002:5002"
+    environment:
+      FLIPT_URL: http://flipt:8080
+      FLIPT_NAMESPACE: dev
+      CACHE_TTL_SECONDS: "60"
+      FLAG_LIST_TTL_SECONDS: "60"
+    depends_on:
+      flipt-seed:
+        condition: service_completed_successfully
+
   app1:
     build: ./app1
     ports:
       - "5001:5001"
     environment:
       FLIPT_URL: http://flipt:8080
+      BFF_URL: http://bff:5002
       FLIPT_NAMESPACE: dev
     depends_on:
       flipt-seed:
         condition: service_completed_successfully
+      bff:
+        condition: service_started
 
 volumes:
   postgres_data:

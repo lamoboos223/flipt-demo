@@ -1,6 +1,7 @@
 import os
 
 FLIPT_URL = os.getenv("FLIPT_URL", "http://flipt:8080")
+BFF_URL = os.getenv("BFF_URL", "")
 DEFAULT_NAMESPACE = os.getenv("FLIPT_NAMESPACE", "dev")
 DEFAULT_CITY = os.getenv("DEFAULT_CITY", "riyadh")
 ENV_PATTERN = "^(dev|qa|prod)$"

@@ -5,19 +5,19 @@ A POC demo with **Flipt v1** + **PostgreSQL**, three namespaces (`dev`, `qa`, `p
 ## Architecture
 
 ```
-┌─────────────┐     evaluate flags      ┌──────────────┐
-│   app1      │ ──────────────────────► │  Flipt v1    │
-│  (Python)   │   namespace = dev/qa/prod│  :8080       │
-└─────────────┘                         └──────┬───────┘
-                                               │
-                                               ▼
-                                      ┌──────────────┐
-                                      │  PostgreSQL  │
-                                      │  (flipt only)│
-                                      └──────────────┘
+┌─────────────┐                    ┌──────────────┐
+│   app1      │ ──► BFF (batch) ──►│  Flipt v1    │
+│  (Python)   │                    │  :8080       │
+└─────────────┘                    └──────┬───────┘
+       ▲                                  │
+       │                                  ▼
+┌─────────────┐                    ┌──────────────┐
+│ Mobile app  │ ──► BFF :5002      │  PostgreSQL  │
+└─────────────┘   (one call)       │  (flipt only)│
+                                   └──────────────┘
 ```
 
-app1 has no database — products are hardcoded in memory.
+app1 has no database — products are hardcoded in memory. Both app1 and mobile clients should call **BFF** for flag evaluation (one request, all flags, cached).
 
 ## Quick Start
 
@@ -28,6 +28,7 @@ docker compose up --build
 | Service   | URL                          |
 |-----------|------------------------------|
 | app1      | http://localhost:5001        |
+| BFF       | http://localhost:5002        |
 | Flipt UI  | http://localhost:8080        |
 | Postgres  | localhost:5432               |
 
@@ -92,6 +93,46 @@ When `city=makkah`, `promo-banner` overrides to `ramadan` in all environments (s
 | `makkah-residents` | `city` equals `makkah` |
 | `all-users` | `city` is one of `riyadh`, `makkah`, `jeddah`, `dammam` |
 
+## BFF (mobile / batch flags API)
+
+The **BFF** service is the integration point for mobile clients. It:
+
+1. **Auto-discovers** all enabled flags in a namespace from Flipt (no hardcoded flag list)
+2. **Batch-evaluates** them in a single `POST /evaluate/v1/batch` call to Flipt
+3. **Caches** results in memory (default 60s) keyed by namespace + entity + context
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/flags?ns=dev&entity_id=user-123&city=riyadh` | Evaluate all flags (GET, query params) |
+| `POST /api/v1/flags/evaluate` | Evaluate all flags (POST, JSON body) |
+| `GET /api/v1/flags/list?ns=dev` | List enabled flags in namespace |
+| `GET /api/v1/cache/stats` | Cache hit/miss stats |
+| `POST /api/v1/cache/invalidate` | Clear cache (optional `?namespace=dev`) |
+
+Example mobile call:
+
+```bash
+curl -X POST http://localhost:5002/api/v1/flags/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{"namespace":"dev","entity_id":"user-123","context":{"city":"makkah"}}'
+```
+
+Response:
+
+```json
+{
+  "namespace": "dev",
+  "entity_id": "user-123",
+  "context": { "city": "makkah" },
+  "flags": { "theme-v2": true, "payment-crypto": true },
+  "variants": { "promo-banner": "ramadan", "product-card-style": "grid" },
+  "flag_count": 9,
+  "cached": false
+}
+```
+
+Environment variables: `CACHE_TTL_SECONDS` (default 60), `FLAG_LIST_TTL_SECONDS` (default 60).
+
 ## app1 API
 
 | Endpoint | Description |
@@ -129,5 +170,6 @@ Example `/api/flags` response:
 ├── docker-compose.yml
 ├── postgres/init.sql           # Creates flipt database
 ├── flipt-seed/                 # Bootstrap namespaces/flags
+├── BFF/                        # Batch flag evaluation + cache for mobile
 └── app1/                       # Stateless POC demo app
 ```
