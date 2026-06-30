@@ -33,6 +33,16 @@ docker compose up --build
 
 ## Feature Flags
 
+Flags are split into **boolean** (on/off) and **variant** (pick one of several options). All evaluation calls pass context:
+
+```json
+{ "city": "riyadh" }
+```
+
+Use the environment and city dropdowns in the UI to test different combinations.
+
+### Boolean flags
+
 | Flag | Controls |
 |------|----------|
 | `theme-v2` | Dark modern UI vs classic light theme |
@@ -42,13 +52,45 @@ docker compose up --build
 | `payment-crypto` | Crypto — segment rollout for `city=makkah` |
 | `express-checkout` | Express checkout banner |
 
-`payment-crypto` uses a segment rollout. app1 passes evaluation context:
+Default values per namespace:
 
-```json
-{ "city": "makkah" }
-```
+| Flag | dev | qa | prod |
+|------|-----|-----|------|
+| `theme-v2` | on | on | off |
+| `payment-paypal` | on | on | off |
+| `payment-apple-pay` | on | off | off |
+| `payment-bnpl` | on | on | off |
+| `payment-crypto` | off* | off* | off* |
+| `express-checkout` | on | on | off |
 
-Use the city dropdown in the UI to test (Makkah → crypto shown, Riyadh → hidden).
+\* `payment-crypto` is off by default but enabled via segment rollout when `city=makkah`.
+
+### Variant flags
+
+Variant flags return a string key instead of true/false. app1 uses them to change UI layout and messaging.
+
+| Flag | Variants | What it controls |
+|------|----------|------------------|
+| `promo-banner` | `none`, `sale`, `free-shipping`, `ramadan` | Home-screen promo banner message |
+| `product-card-style` | `grid`, `list` | Product listing layout |
+| `checkout-layout` | `classic`, `compact`, `one-page` | Checkout screen layout |
+
+Default variant per namespace (Riyadh / any supported city):
+
+| Flag | dev | qa | prod |
+|------|-----|-----|------|
+| `promo-banner` | `sale` | `free-shipping` | `none` |
+| `product-card-style` | `grid` | `list` | `grid` |
+| `checkout-layout` | `classic` | `compact` | `one-page` |
+
+When `city=makkah`, `promo-banner` overrides to `ramadan` in all environments (segment rule takes priority).
+
+### Segments
+
+| Segment | Match rule |
+|---------|------------|
+| `makkah-residents` | `city` equals `makkah` |
+| `all-users` | `city` is one of `riyadh`, `makkah`, `jeddah`, `dammam` |
 
 ## app1 API
 
@@ -56,8 +98,30 @@ Use the city dropdown in the UI to test (Makkah → crypto shown, Riyadh → hid
 |----------|-------------|
 | `GET /` | Mobile marketplace UI |
 | `GET /api/products` | Hardcoded product list |
-| `GET /api/flags?env=dev&city=makkah` | Evaluated flags + payment methods |
+| `GET /api/flags?env=dev&city=makkah` | Evaluated boolean flags, variants, and payment methods |
 | `POST /api/checkout?env=dev` | Place order — rejects disabled payment methods |
+
+Example `/api/flags` response:
+
+```json
+{
+  "namespace": "dev",
+  "context": { "city": "riyadh" },
+  "flags": {
+    "theme-v2": true,
+    "payment-crypto": false
+  },
+  "variants": {
+    "promo-banner": "sale",
+    "product-card-style": "grid",
+    "checkout-layout": "classic"
+  },
+  "promo_banner": "sale",
+  "promo_message": "🔥 Mega Sale — Up to 50% off today!",
+  "product_card_style": "grid",
+  "checkout_layout": "classic"
+}
+```
 
 ## Project Layout
 
